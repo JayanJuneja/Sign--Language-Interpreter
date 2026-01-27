@@ -1,4 +1,4 @@
-# 🤟 Sign Language Captioner
+#  Sign Language Captioner
 
 Real-time sign language recognition using MediaPipe Hands and machine learning. This project provides both a demo system for quick alphabet/word recognition and a research pipeline for processing the WLASL dataset.
 
@@ -245,5 +245,3 @@ Potential improvements for this project:
 This project is for educational purposes. Please respect the licenses of the underlying libraries and datasets.
 
 ---
-
-**Happy signing! 🤟**
