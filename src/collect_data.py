@@ -17,7 +17,7 @@ WORD_LABELS = [
     'HELLO', 'YES', 'NO', 'THANK_YOU', 'PLEASE', 
     'SORRY', 'HELP', 'STOP', 'LOVE', 'GOOD', 
     'BAD', 'WATER', 'EAT', 'MORE', 'DONE', 
-    'GO', 'COME', 'WANT', 'NAME', 'FRIEND'
+    'GO', 'COME', 'WANT', 'NAME', 'FRIEND', 'FUCK YOU Too!'
 ]
 
 # Key mappings for words

@@ -27,7 +27,8 @@ def main():
     print(f"Classes: {sorted(df['label'].unique())}")
     print(f"\nClass distribution:")
     print(df['label'].value_counts().sort_index())
-    
+
+   
     # Check minimum samples per class
     class_counts = df['label'].value_counts()
     min_samples = class_counts.min()

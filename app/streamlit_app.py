@@ -1,5 +1,6 @@
 """
 Real-time sign language captioning with Streamlit UI.
+Compatible with MediaPipe 0.10.32+
 """
 import streamlit as st
 import cv2
@@ -7,24 +8,25 @@ import numpy as np
 import pickle
 import json
 import os
-import sys
 from collections import deque
 import pyttsx3
 import threading
-
-# Import MediaPipe
 import mediapipe as mp
-from mediapipe import solutions
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 
 
-def extract_features_simple(hand_landmarks):
+def extract_features_simple(hand_landmarks_list):
     """Extract features from hand landmarks."""
-    if hand_landmarks is None:
+    if not hand_landmarks_list or len(hand_landmarks_list) == 0:
         return np.zeros(63)
+    
+    # Get first hand
+    hand_landmarks = hand_landmarks_list[0]
     
     # Extract landmark coordinates
     landmarks = []
-    for lm in hand_landmarks.landmark:
+    for lm in hand_landmarks:
         landmarks.append([lm.x, lm.y, lm.z])
     
     landmarks = np.array(landmarks)
@@ -43,6 +45,45 @@ def extract_features_simple(hand_landmarks):
     return features
 
 
+def draw_landmarks_on_image(bgr_image, detection_result):
+    """Draw hand landmarks on image."""
+    if not detection_result.hand_landmarks:
+        return bgr_image
+    
+    hand_landmarks_list = detection_result.hand_landmarks
+    annotated_image = np.copy(bgr_image)
+    
+    # Loop through detected hands
+    for hand_landmarks in hand_landmarks_list:
+        # Draw landmarks
+        for landmark in hand_landmarks:
+            x = int(landmark.x * bgr_image.shape[1])
+            y = int(landmark.y * bgr_image.shape[0])
+            cv2.circle(annotated_image, (x, y), 5, (0, 255, 0), -1)
+        
+        # Draw connections
+        connections = [
+            (0, 1), (1, 2), (2, 3), (3, 4),  # Thumb
+            (0, 5), (5, 6), (6, 7), (7, 8),  # Index
+            (0, 9), (9, 10), (10, 11), (11, 12),  # Middle
+            (0, 13), (13, 14), (14, 15), (15, 16),  # Ring
+            (0, 17), (17, 18), (18, 19), (19, 20),  # Pinky
+            (5, 9), (9, 13), (13, 17)  # Palm
+        ]
+        
+        for connection in connections:
+            start_idx, end_idx = connection
+            start = hand_landmarks[start_idx]
+            end = hand_landmarks[end_idx]
+            
+            start_point = (int(start.x * bgr_image.shape[1]), int(start.y * bgr_image.shape[0]))
+            end_point = (int(end.x * bgr_image.shape[1]), int(end.y * bgr_image.shape[0]))
+            
+            cv2.line(annotated_image, start_point, end_point, (255, 255, 255), 2)
+    
+    return annotated_image
+
+
 class SignLanguageCaptioner:
     def __init__(self, model_path, label_map_path):
         # Load model
@@ -54,16 +95,25 @@ class SignLanguageCaptioner:
             label_data = json.load(f)
             self.idx_to_label = {int(k): v for k, v in label_data['idx_to_label'].items()}
         
+        # Download hand landmarker model if needed
+        import urllib.request
+        landmarker_path = 'hand_landmarker.task'
+        
+        if not os.path.exists(landmarker_path):
+            st.info("Downloading hand detection model...")
+            url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+            urllib.request.urlretrieve(url, landmarker_path)
+        
         # Setup MediaPipe
-        self.mp_hands = solutions.hands
-        self.mp_drawing = solutions.drawing_utils
-        self.mp_drawing_styles = solutions.drawing_styles
-        self.hands = self.mp_hands.Hands(
-            static_image_mode=False,
-            max_num_hands=1,
-            min_detection_confidence=0.5,
+        base_options = python.BaseOptions(model_asset_path=landmarker_path)
+        options = vision.HandLandmarkerOptions(
+            base_options=base_options,
+            num_hands=1,
+            min_hand_detection_confidence=0.5,
+            min_hand_presence_confidence=0.5,
             min_tracking_confidence=0.5
         )
+        self.detector = vision.HandLandmarker.create_from_options(options)
         
         # Stability tracking
         self.prediction_buffer = deque(maxlen=30)
@@ -78,24 +128,17 @@ class SignLanguageCaptioner:
         """
         # Convert to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         
-        # Process with MediaPipe
-        results = self.hands.process(rgb_frame)
+        # Detect hands
+        detection_result = self.detector.detect(mp_image)
         
         # Draw landmarks
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                self.mp_drawing.draw_landmarks(
-                    frame,
-                    hand_landmarks,
-                    self.mp_hands.HAND_CONNECTIONS,
-                    self.mp_drawing_styles.get_default_hand_landmarks_style(),
-                    self.mp_drawing_styles.get_default_hand_connections_style()
-                )
-            
+        annotated_frame = draw_landmarks_on_image(frame, detection_result)
+        
+        if detection_result.hand_landmarks:
             # Extract features
-            hand_landmarks = results.multi_hand_landmarks[0]
-            features = extract_features_simple(hand_landmarks)
+            features = extract_features_simple(detection_result.hand_landmarks)
             features = features.reshape(1, -1)
             
             # Predict
@@ -104,9 +147,9 @@ class SignLanguageCaptioner:
             confidence = pred_proba[pred_idx]
             label = self.idx_to_label[pred_idx]
             
-            return label, confidence, frame
+            return label, confidence, annotated_frame
         else:
-            return None, 0.0, frame
+            return None, 0.0, annotated_frame
     
     def check_stability(self, label, confidence, threshold, stability_frames):
         """
@@ -162,7 +205,7 @@ def main():
         initial_sidebar_state="collapsed"
     )
     
-    st.title("🤟 Real-Time Sign Language Captioner")
+    st.title("welocme to JJ's First Real-Time Sign Language Captioner")
     
     # Check if model exists
     model_path = 'models/demo_model.pkl'
@@ -246,9 +289,11 @@ def main():
         with col_a:
             if st.button("▶️ Start Camera", use_container_width=True):
                 st.session_state.running = True
+                st.rerun()
         with col_b:
             if st.button("⏸️ Stop Camera", use_container_width=True):
                 st.session_state.running = False
+                st.rerun()
     
     # Column 3: Transcript
     with col3:
