@@ -240,8 +240,8 @@ Potential improvements for this project:
 - **WLASL Dataset**: Word-Level American Sign Language dataset
 - Built with Python, OpenCV, MediaPipe, scikit-learn, PyTorch, and Streamlit
 
-## License
 
-This project is for educational purposes. Please respect the licenses of the underlying libraries and datasets.
+© 2026 Jayan Juneja. All rights reserved.
+Code is provided for demonstration purposes only.
 
 ---
